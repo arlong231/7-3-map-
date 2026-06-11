@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>내곡동 지역 문제 탐구 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ── 화면 레이아웃 ── */
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Malgun Gothic','Apple SD Gothic Neo','Nanum Gothic',sans-serif;
+  background: #F0EDE6;
+}
+
+/* ── 인쇄 전체 페이지 ── */
+.page {
+  width: 594mm;   /* A1 가로 */
+  min-height: 841mm; /* A1 세로 */
+  background: white;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+}
+
+/* ── 헤더 ── */
+.header {
+  background: #1E3A5F;
+  padding: 14px 24px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.header-title {
+  font-size: 32pt;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 2px;
+}
+.header-sub {
+  font-size: 13pt;
+  color: #94A3B8;
+  letter-spacing: 1px;
+}
+.header-school {
+  margin-left: auto;
+  font-size: 12pt;
+  color: #64748B;
+}
+
+/* ── 지도 ── */
+#map {
+  flex: 1;
+  min-height: 620mm;
+  width: 100%;
+}
+
+/* ── 하단 패널 ── */
+.bottom {
+  display: grid;
+  grid-template-columns: 200mm 240mm 1fr;
+  gap: 0;
+  border-top: 3px solid #1E3A5F;
+  flex-shrink: 0;
+}
+.panel {
+  padding: 14px 18px;
+  border-right: 2px solid #E2E8F0;
+}
+.panel:last-child { border-right: none; }
+.panel-title {
+  font-size: 13pt;
+  font-weight: 800;
+  color: white;
+  background: #1E3A5F;
+  margin: -14px -18px 12px;
+  padding: 8px 18px;
+  letter-spacing: 2px;
+}
+.panel-title.green { background: #0D9488; }
+.panel-title.red   { background: #2D6A4F; }
+
+/* 지도 기호 */
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+  font-size: 11pt;
+  color: #444;
+}
+.leg-road { width:36px; height:10px; border-radius:3px; flex-shrink:0; }
+.leg-line { width:36px; height:0; flex-shrink:0; }
+.leg-circle { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
+.leg-rect { width:20px; height:14px; border-radius:3px; flex-shrink:0; }
+
+/* SGIS 탐색 */
+.sgis-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.sgis-dot {
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.sgis-label { font-size: 12pt; font-weight: 800; color: #222; }
+.sgis-desc  { font-size: 10pt; color: #666; margin-top: 2px; }
+.sgis-hint  {
+  font-size: 9.5pt; color: #888;
+  margin-top: 10px;
+  border-top: 1px dashed #CCC;
+  padding-top: 8px;
+  line-height: 1.6;
+}
+
+/* 모둠 범례 */
+.team-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-circle {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13pt; font-weight: 800; color: white;
+  flex-shrink: 0;
+}
+.team-name { font-size: 13pt; font-weight: 700; }
+.team-hint {
+  font-size: 9.5pt; color: #888;
+  margin-top: 10px;
+  grid-column: 1/-1;
+  border-top: 1px dashed #CCC;
+  padding-top: 8px;
+  line-height: 1.6;
+}
+
+/* ── 인쇄 설정 ── */
+@media print {
+  @page {
+    size: A1 landscape;
+    margin: 0;
+  }
+  body { background: white; }
+  .page {
+    width: 100%;
+    min-height: 100vh;
+    box-shadow: none;
+  }
+  .print-btn { display: none !important; }
+}
+
+/* ── 화면용 버튼 ── */
+.print-btn {
+  position: fixed;
+  top: 16px; right: 16px;
+  background: #1E3A5F;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14pt;
+  font-weight: 800;
+  cursor: pointer;
+  z-index: 9999;
+  font-family: inherit;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.print-btn:hover { background: #0D9488; }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">🖨 A1 인쇄</button>
+
+<div class="page">
+
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-title">내곡동 지역 문제 탐구 지도</div>
+    <div class="header-sub">[9사(지리)07-03] 우리 동네 지역 문제를 발견하고 지리적으로 시각화하기</div>
+    <div class="header-school">내곡중학교 사회 · 2학년</div>
+  </div>
+
+  <!-- 지도 -->
+  <div id="map"></div>
+
+  <!-- 하단 패널 -->
+  <div class="bottom">
+
+    <!-- 지도 기호 -->
+    <div class="panel">
+      <div class="panel-title">지도 기호</div>
+      <div class="legend-row">
+        <div class="leg-circle" style="background:#EE1C25"></div>
+        지하철역 (신분당선)
+      </div>
+      <div class="legend-row">
+        <div class="leg-circle" style="background:#1E3A5F"></div>
+        내곡중학교
+      </div>
+      <div class="legend-row">
+        <div class="leg-circle" style="background:#2A6496"></div>
+        주민센터·공공기관
+      </div>
+      <div class="legend-row" style="margin-top:10px">
+        <div style="width:36px;height:3px;background:#C8A84B;border-top:2px dashed #C8A84B;flex-shrink:0"></div>
+        행정동 경계
+      </div>
+    </div>
+
+    <!-- SGIS 탐색 주제 -->
+    <div class="panel">
+      <div class="panel-title green">SGIS 탐색 주제</div>
+      <div class="sgis-item">
+        <div class="sgis-dot" style="background:#E63946"></div>
+        <div>
+          <div class="sgis-label">복지·문화</div>
+          <div class="sgis-desc">청소년시설 · 문화시설 · 공원 분포</div>
+        </div>
+      </div>
+      <div class="sgis-item">
+        <div class="sgis-dot" style="background:#457B9D"></div>
+        <div>
+          <div class="sgis-label">건강·안전</div>
+          <div class="sgis-desc">CCTV 분포 · 교통사고 현황</div>
+        </div>
+      </div>
+      <div class="sgis-item">
+        <div class="sgis-dot" style="background:#2D6A4F"></div>
+        <div>
+          <div class="sgis-label">주거·교통</div>
+          <div class="sgis-desc">대중교통 접근성 · 노후주택 비율</div>
+        </div>
+      </div>
+      <div class="sgis-hint">
+        대화형 통계지도 → 내곡동 검색<br>
+        <strong>어디에? · 무엇이? · 왜 문제인가?</strong>
+      </div>
+    </div>
+
+    <!-- 모둠별 탐구 문제 -->
+    <div class="panel">
+      <div class="panel-title red">모둠별 탐구 문제</div>
+      <div class="team-grid">
+        <div class="team-row">
+          <div class="team-circle" style="background:#E63946">1</div>
+          <span class="team-name" style="color:#E63946">1모둠</span>
+        </div>
+        <div class="team-row">
+          <div class="team-circle" style="background:#457B9D">4</div>
+          <span class="team-name" style="color:#457B9D">4모둠</span>
+        </div>
+        <div class="team-row">
+          <div class="team-circle" style="background:#F4A261">2</div>
+          <span class="team-name" style="color:#E07A30">2모둠</span>
+        </div>
+        <div class="team-row">
+          <div class="team-circle" style="background:#7C3AED">5</div>
+          <span class="team-name" style="color:#7C3AED">5모둠</span>
+        </div>
+        <div class="team-row">
+          <div class="team-circle" style="background:#2A9D8F">3</div>
+          <span class="team-name" style="color:#2A9D8F">3모둠</span>
+        </div>
+        <div class="team-row">
+          <div class="team-circle" style="background:#2D6A4F">6</div>
+          <span class="team-name" style="color:#2D6A4F">6모둠</span>
+        </div>
+        <div class="team-hint">
+          ● 위치 표시 &nbsp;───&nbsp; 선으로 연결 &nbsp;📌 포스트잇 부착<br>
+          어디에? · 무엇이? · 왜 문제인가?
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /bottom -->
+</div><!-- /page -->
+
+<script>
+// ── 지도 초기화 ──
+const map = L.map('map', {
+  center: [37.4530, 127.0530],
+  zoom: 15,
+  zoomControl: true,
+  attributionControl: true
+});
+
+// CartoDB Positron (한글 레이블, 깔끔한 배경)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+// ── 행정동 경계 (대략적 폴리곤) ──
+const naegokBoundary = L.polygon([
+  [37.475, 127.038], [37.474, 127.062], [37.465, 127.072],
+  [37.450, 127.075], [37.440, 127.068], [37.438, 127.050],
+  [37.440, 127.038], [37.452, 127.035]
+], {
+  color: '#C8A84B', weight: 3, dashArray: '12,8',
+  fill: true, fillColor: '#FFF8E7', fillOpacity: 0.15
+}).addTo(map);
+naegokBoundary.bindTooltip('내곡동', {
+  permanent: true, direction: 'center',
+  className: 'dong-label'
+});
+
+const yeomgokBoundary = L.polygon([
+  [37.475, 127.020], [37.475, 127.038], [37.440, 127.038],
+  [37.440, 127.020]
+], {
+  color: '#8A6AB8', weight: 2.5, dashArray: '10,6',
+  fill: true, fillColor: '#F5F0FF', fillOpacity: 0.12
+}).addTo(map);
+yeomgokBoundary.bindTooltip('염곡동', {
+  permanent: true, direction: 'center',
+  className: 'dong-label'
+});
+
+const sinwonBoundary = L.polygon([
+  [37.440, 127.020], [37.440, 127.050],
+  [37.430, 127.052], [37.428, 127.020]
+], {
+  color: '#6A8EB8', weight: 2.5, dashArray: '10,6',
+  fill: true, fillColor: '#F0F7FF', fillOpacity: 0.12
+}).addTo(map);
+sinwonBoundary.bindTooltip('신원동', {
+  permanent: true, direction: 'center',
+  className: 'dong-label'
+});
+
+// ── 아이콘 정의 ──
+function makeIcon(emoji, bg, size=44) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;
+      background:${bg};
+      border-radius:${size*0.22}px;
+      border:3px solid white;
+      box-shadow:0 3px 8px rgba(0,0,0,0.35);
+      display:flex;align-items:center;justify-content:center;
+      font-size:${size*0.5}px;
+    ">${emoji}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
+  });
+}
+
+function makeSubwayIcon(color='#EE1C25') {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:40px;height:40px;
+      background:${color};
+      border-radius:50%;
+      border:3px solid white;
+      box-shadow:0 3px 8px rgba(0,0,0,0.35);
+      display:flex;align-items:center;justify-content:center;
+      font-size:17px;font-weight:900;color:white;
+      font-family:'Malgun Gothic',sans-serif;
+    ">M</div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20]
+  });
+}
+
+// ── 마커 추가 ──
+
+// 내곡중학교 (핵심)
+L.marker([37.4518, 127.0544], { icon: makeIcon('🏫','#1E3A5F',56) })
+  .addTo(map)
+  .bindTooltip('<b>내곡중학교</b>', { permanent:true, direction:'right', offset:[32,0], className:'place-label-main' });
+
+// 청계산입구역
+L.marker([37.4482, 127.0547], { icon: makeSubwayIcon('#EE1C25') })
+  .addTo(map)
+  .bindTooltip('<b>청계산입구역</b>', { permanent:true, direction:'bottom', offset:[0,24], className:'place-label' });
+
+// 내곡동 주민센터
+L.marker([37.4493, 127.0583], { icon: makeIcon('🏛','#2A6496',48) })
+  .addTo(map)
+  .bindTooltip('<b>내곡동 주민센터</b>', { permanent:true, direction:'right', offset:[28,0], className:'place-label' });
+
+// ── 툴팁 CSS ──
+const style = document.createElement('style');
+style.textContent = `
+  .dong-label {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 18pt !important;
+    font-weight: 900 !important;
+    color: #666 !important;
+    letter-spacing: 6px !important;
+    opacity: 0.7;
+  }
+  .place-label-main {
+    background: white !important;
+    border: 2.5px solid #1E3A5F !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+    font-size: 13pt !important;
+    font-weight: 800 !important;
+    color: #1E3A5F !important;
+    padding: 4px 10px !important;
+    white-space: nowrap;
+  }
+  .place-label {
+    background: white !important;
+    border: 1.5px solid #CCC !important;
+    border-radius: 5px !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    color: #333 !important;
+    padding: 3px 8px !important;
+    white-space: nowrap;
+  }
+  .place-label-small {
+    background: rgba(255,255,255,0.9) !important;
+    border: 1px solid #DDD !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-size: 10pt !important;
+    font-weight: 600 !important;
+    color: #555 !important;
+    padding: 2px 7px !important;
+    white-space: nowrap;
+  }
+  /* 툴팁 꼭지 제거 */
+  .dong-label::before,
+  .place-label-main::before,
+  .place-label::before,
+  .place-label-small::before { display:none !important; }
+`;
+document.head.appendChild(style);
+
+// ── 인쇄 전 지도 크기 조정 ──
+window.addEventListener('beforeprint', () => {
+  map.invalidateSize();
+});
+</script>
+</body>
+</html>
